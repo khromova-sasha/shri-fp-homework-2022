@@ -14,38 +14,51 @@
  * Иногда промисы от API будут приходить в состояние rejected, (прямо как и API в реальной жизни)
  * Ответ будет приходить в поле {result}
  */
- import Api from '../tools/api';
+import Api from '../tools/api';
+import {allPass} from "./validators";
 
- const api = new Api();
+const api = new Api();
 
- /**
-  * Я – пример, удали меня
-  */
- const wait = time => new Promise(resolve => {
-     setTimeout(resolve, time);
- })
+const validate = (value, handleError) => {
+    if (!allPass([
+            v => v.length > 2,
+            v => v.length < 10,
+            v => v[0] !== '-', v => v.match(/^[0-9]*\.?[0-9]*$/)
+    ])(value)) {
+        handleError('ValidationError');
+        return null;
+    }
+    return value;
+}
 
- const processSequence = ({value, writeLog, handleSuccess, handleError}) => {
-     /**
-      * Я – пример, удали меня
-      */
-     writeLog(value);
+const toNumber = (value) => Math.round(Number(value));
+const toBinary = async (value) => (await api.get('https://api.tech/numbers/base', {from: 10, to: 2, number: value})).result;
+const getDigitsNumber = (value) => value.toString().length;
+const square = (value) => value * value;
+const mod3 = (value) => value % 3;
+const getAnimal = async (id) =>  (await api.get(`https://animals.tech/${id}`, {})).result;
+const fnWithLogs = (fn, logFn) => async (value) => {
+    const res = await fn(value);
+    logFn(res);
+    return res;
+};
+const asyncCompose = (...asyncFn) => {
+    return async (x) => await asyncFn.reduceRight(async (v, f) => f(await v), Promise.resolve(x));
+}
 
-     api.get('https://api.tech/numbers/base', {from: 2, to: 10, number: '01011010101'}).then(({result}) => {
-         writeLog(result);
-     });
+const processSequence = async ({value, writeLog, handleSuccess, handleError}) => {
+    writeLog(value);
+    if (validate(value, handleError) !== null) {
+        await asyncCompose(
+            handleSuccess,
+            getAnimal,
+            fnWithLogs(mod3, writeLog),
+            fnWithLogs(square, writeLog),
+            fnWithLogs(getDigitsNumber, writeLog),
+            fnWithLogs(toBinary, writeLog),
+            fnWithLogs(toNumber, writeLog)
+        )(value);
+    }
+}
 
-     wait(2500).then(() => {
-         writeLog('SecondLog')
-
-         return wait(1500);
-     }).then(() => {
-         writeLog('ThirdLog');
-
-         return wait(400);
-     }).then(() => {
-         handleSuccess('Done');
-     });
- }
-
- export default processSequence;
+export default processSequence;
